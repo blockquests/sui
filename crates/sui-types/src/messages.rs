@@ -2231,25 +2231,33 @@ pub enum ExecuteTransactionResponse {
     ),
 }
 
-#[derive(Clone, Debug, schemars::JsonSchema)]
-pub enum QuorumDriverRequestType {
-    ImmediateReturn,
-    WaitForTxCert,
-    WaitForEffectsCert,
+// #[derive(Clone, Debug, schemars::JsonSchema)]
+// pub enum QuorumDriverRequestType {
+//     ImmediateReturn,
+//     WaitForTxCert,
+//     WaitForEffectsCert,
+// }
+
+// #[derive(Debug)]
+// pub struct QuorumDriverRequest {
+//     pub transaction: VerifiedTransaction,
+//     // pub tx_cert_notifier: oneshot::Sender<VerifiedCertificate>,
+//     // pub notifier: oneshot::Sender<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>,
+//     // pub request_type: QuorumDriverRequestType,
+// }
+
+#[derive(Debug, Clone)]
+pub struct QuorumDriverResponse {
+    pub tx_cert: VerifiedCertificate,
+    pub effects_cert: VerifiedCertifiedTransactionEffects,
 }
 
-#[derive(Clone, Debug)]
-pub struct QuorumDriverRequest {
-    pub transaction: VerifiedTransaction,
-    pub request_type: QuorumDriverRequestType,
-}
-
-#[derive(Clone, Debug)]
-pub enum QuorumDriverResponse {
-    ImmediateReturn,
-    TxCert(Box<VerifiedCertificate>),
-    EffectsCert(Box<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>),
-}
+// #[derive(Clone, Debug)]
+// pub enum QuorumDriverResponse {
+//     // ImmediateReturn,
+//     TxCert(Box<VerifiedCertificate>),
+//     EffectsCert(Box<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>),
+// }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommitteeInfoRequest {

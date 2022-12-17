@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::TryFutureExt;
 /*
 Transaction Orchestrator is a Node component that utilizes Quorum Driver to
 submit transactions to validators for finality, and proactively executes
@@ -9,7 +10,9 @@ finalized transactions locally, when possible.
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use std::sync::Arc;
 use std::time::Duration;
+use sui_types::base_types::TransactionDigest;
 
+use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::authority::AuthorityState;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
@@ -23,9 +26,8 @@ use std::path::Path;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    CertifiedTransactionEffects, ExecuteTransactionRequest, ExecuteTransactionRequestType,
-    ExecuteTransactionResponse, QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse,
-    VerifiedCertificate, VerifiedCertifiedTransactionEffects,
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+    QuorumDriverResponse, VerifiedCertificate, VerifiedCertifiedTransactionEffects,
 };
 use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
@@ -40,12 +42,15 @@ use sui_types::messages::VerifiedTransaction;
 // is returned to client.
 const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(5);
 
+const WAIT_FOR_FINALITY_TIMEOUT: Duration = Duration::from_secs(30);
+
 pub struct TransactiondOrchestrator<A> {
-    quorum_driver_handler: QuorumDriverHandler<A>,
-    quorum_driver: Arc<QuorumDriver<A>>,
+    quorum_driver_handler: Arc<QuorumDriverHandler<A>>,
+    // quorum_driver: Arc<QuorumDriver<A>>,
     validator_state: Arc<AuthorityState>,
     _local_executor_handle: JoinHandle<()>,
     pending_tx_log: Arc<WritePathPendingTransactionLog>,
+    notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResponse>>,
     metrics: Arc<TransactionOrchestratorMetrics>,
 }
 
@@ -59,10 +64,14 @@ where
         parent_path: &Path,
         prometheus_registry: &Registry,
     ) -> Self {
-        let quorum_driver_handler =
-            QuorumDriverHandler::new(validators, QuorumDriverMetrics::new(prometheus_registry));
-        let quorum_driver = quorum_driver_handler.clone_quorum_driver();
-        let effects_receiver = quorum_driver_handler.subscribe();
+        let notifier = Arc::new(NotifyRead::new());
+        let quorum_driver_handler = Arc::new(QuorumDriverHandler::new_with_notify_read(
+            validators,
+            notifier.clone(),
+            Arc::new(QuorumDriverMetrics::new(prometheus_registry)),
+        ));
+        // let quorum_driver = quorum_driver_handler.clone_quorum_driver();
+        let effects_receiver = quorum_driver_handler.subscribe_to_effects();
         let state_clone = validator_state.clone();
         let metrics = Arc::new(TransactionOrchestratorMetrics::new(prometheus_registry));
         let metrics_clone = metrics.clone();
@@ -83,12 +92,29 @@ where
         };
         Self {
             quorum_driver_handler,
-            quorum_driver,
+            // quorum_driver,
             validator_state,
             _local_executor_handle,
             pending_tx_log,
+            notifier,
             metrics,
         }
+    }
+
+    // TODO, explain sync
+    async fn submit(
+        &self,
+        transaction: VerifiedTransaction,
+    ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResponse>> {
+        let reg = self.notifier.register_one(transaction.digest());
+        if self
+            .pending_tx_log
+            .write_pending_transaction_maybe(&transaction)
+            .await?
+        {
+            self.quorum_driver().submit_transaction(transaction).await?;
+        }
+        Ok(reg)
     }
 
     #[instrument(name = "tx_orchestrator_execute_transaction", level = "debug", skip_all, fields(request_type = ?request.request_type), err)]
@@ -104,80 +130,67 @@ where
         // (and maybe store it for caching purposes)
 
         let transaction = request.transaction.verify()?;
-
+        let tx_digest = *transaction.digest();
+        let ticket = self.submit(transaction).await?;
         // We will shortly refactor the TransactionOrchestrator with a queue-based implementation.
         // TDOO: `should_enqueue` will be used to determine if the transaction should be enqueued.
-        let _should_enqueue = self
-            .pending_tx_log
-            .write_pending_transaction_maybe(&transaction)
-            .await?;
+        // let reg = self.notifier.register_one(&tx_digest);
+        // let _should_enqueue = self
+        //     .pending_tx_log
+        //     .write_pending_transaction_maybe(&transaction)
+        //     .await?;
 
         let wait_for_local_execution = matches!(
             request.request_type,
             ExecuteTransactionRequestType::WaitForLocalExecution
         );
-        let request_type = match request.request_type {
-            ExecuteTransactionRequestType::ImmediateReturn => {
-                QuorumDriverRequestType::ImmediateReturn
-            }
-            ExecuteTransactionRequestType::WaitForTxCert => QuorumDriverRequestType::WaitForTxCert,
-            ExecuteTransactionRequestType::WaitForEffectsCert
-            | ExecuteTransactionRequestType::WaitForLocalExecution => {
-                QuorumDriverRequestType::WaitForEffectsCert
-            }
+        let Ok(response) = timeout(
+            WAIT_FOR_FINALITY_TIMEOUT,
+            ticket,
+        ).await else {
+            debug!(?tx_digest, "Timeout waiting for transaction finality");
+            return Err(SuiError::TimeoutError);
         };
-        let tx_digest = *transaction.digest();
-        let execution_result = self
-            .quorum_driver
-            .execute_transaction(QuorumDriverRequest {
-                transaction,
-                request_type,
-            })
-            .await
-            .tap_err(|err| {
-                debug!(
-                    ?tx_digest,
-                    "Failed to execute transction via Quorum Driver: {:?}", err
-                )
-            })?;
 
         good_response_metrics.inc();
-        match execution_result {
-            QuorumDriverResponse::ImmediateReturn => {
-                Ok(ExecuteTransactionResponse::ImmediateReturn)
-            }
-            QuorumDriverResponse::TxCert(result) => Ok(ExecuteTransactionResponse::TxCert(
-                Box::new(result.into_inner()),
-            )),
-            QuorumDriverResponse::EffectsCert(result) => {
-                let (tx_cert, effects_cert) = *result;
-                if !wait_for_local_execution {
-                    return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert.into(),
-                        effects_cert.into(),
-                        false,
-                    ))));
-                }
-                match Self::execute_finalized_tx_locally_with_timeout(
-                    &self.validator_state,
-                    &tx_cert,
-                    &effects_cert,
-                    &self.metrics,
-                )
-                .await
-                {
-                    Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert.into(),
-                        effects_cert.into(),
-                        true,
-                    )))),
-                    Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert.into(),
-                        effects_cert.into(),
-                        false,
-                    )))),
-                }
-            }
+        // match execution_result {
+        //     QuorumDriverResponse::ImmediateReturn => {
+        //         Ok(ExecuteTransactionResponse::ImmediateReturn)
+        //     }
+        //     QuorumDriverResponse::TxCert(result) => Ok(ExecuteTransactionResponse::TxCert(
+        //         Box::new(result.into_inner()),
+        //     )),
+        //     QuorumDriverResponse::EffectsCert(result) => {
+        //         let (tx_cert, effects_cert) = *result;
+        let QuorumDriverResponse {
+            tx_cert,
+            effects_cert,
+        } = response;
+        if !wait_for_local_execution {
+            return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                tx_cert.into(),
+                effects_cert.into(),
+                false,
+            ))));
+        }
+        match Self::execute_finalized_tx_locally_with_timeout(
+            &self.validator_state,
+            &tx_cert,
+            &effects_cert,
+            &self.metrics,
+        )
+        .await
+        {
+            Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                tx_cert.into(),
+                effects_cert.into(),
+                true,
+            )))),
+            Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                tx_cert.into(),
+                effects_cert.into(),
+                false,
+            )))),
         }
     }
 
@@ -185,7 +198,7 @@ where
     async fn execute_finalized_tx_locally_with_timeout(
         validator_state: &Arc<AuthorityState>,
         tx_cert: &VerifiedCertificate,
-        effects_cert: &CertifiedTransactionEffects,
+        effects_cert: &VerifiedCertifiedTransactionEffects,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
         // TODO: attempt a finalized tx at most once per request.
@@ -239,13 +252,16 @@ where
 
     async fn loop_execute_finalized_tx_locally(
         validator_state: Arc<AuthorityState>,
-        mut effects_receiver: Receiver<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>,
+        mut effects_receiver: Receiver<QuorumDriverResponse>,
         pending_transaction_log: Arc<WritePathPendingTransactionLog>,
         metrics: Arc<TransactionOrchestratorMetrics>,
     ) {
         loop {
             match effects_receiver.recv().await {
-                Ok((tx_cert, effects_cert)) => {
+                Ok(QuorumDriverResponse {
+                    tx_cert,
+                    effects_cert,
+                }) => {
                     let tx_digest = tx_cert.digest();
                     if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
                         error!(
@@ -272,14 +288,12 @@ where
         }
     }
 
-    pub fn quorum_driver(&self) -> &Arc<QuorumDriver<A>> {
-        &self.quorum_driver
+    pub fn quorum_driver(&self) -> &Arc<QuorumDriverHandler<A>> {
+        &self.quorum_driver_handler
     }
 
-    pub fn subscribe_to_effects_queue(
-        &self,
-    ) -> Receiver<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)> {
-        self.quorum_driver_handler.subscribe()
+    pub fn subscribe_to_effects_queue(&self) -> Receiver<QuorumDriverResponse> {
+        self.quorum_driver_handler.subscribe_to_effects()
     }
 
     fn update_metrics(
