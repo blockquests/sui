@@ -6,7 +6,7 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
     AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    AuthorityStrongQuorumSignInfo, EmptySignInfo, Signable,
+    AuthorityStrongQuorumSignInfo, EmptySignInfo,
 };
 use crate::error::SuiResult;
 use once_cell::sync::OnceCell;
@@ -99,7 +99,7 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
 
 impl<T> Envelope<T, AuthoritySignInfo>
 where
-    T: Message + Signable<Vec<u8>>,
+    T: Message + Serialize,
 {
     pub fn new(
         epoch: EpochId,
@@ -137,7 +137,7 @@ where
 
 impl<T, const S: bool> Envelope<T, AuthorityQuorumSignInfo<S>>
 where
-    T: Message + Signable<Vec<u8>>,
+    T: Message + Serialize,
 {
     pub fn new(
         data: T,

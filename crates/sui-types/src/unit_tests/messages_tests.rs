@@ -12,10 +12,10 @@ use roaring::RoaringBitmap;
 use crate::base_types::random_object_ref;
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
 use crate::crypto::Secp256k1SuiSignature;
+use crate::crypto::SuiAuthoritySignature;
 use crate::crypto::SuiKeyPair;
 use crate::crypto::{
-    get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
-    AuthoritySignInfoTrait, SuiAuthoritySignature,
+    get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfoTrait,
 };
 use crate::object::Owner;
 
@@ -212,6 +212,8 @@ fn test_new_with_signatures() {
 #[test]
 fn test_handle_reject_malicious_signature() {
     let message: Foo = Foo("some data".to_string());
+    let intent_msg = IntentMessage::new(Intent::default(), message.clone());
+
     let mut signatures: Vec<AuthoritySignInfo> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
 
@@ -234,7 +236,7 @@ fn test_handle_reject_malicious_signature() {
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
     {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let sig = AuthoritySignature::new(&message, committee.epoch, &sec);
+        let sig = AuthoritySignature::new_secure(&intent_msg, Some(committee.epoch), &sec);
         quorum.signature.add_signature(sig).unwrap();
     }
     let (mut obligation, idx) = get_obligation_input(&message);
@@ -247,6 +249,8 @@ fn test_handle_reject_malicious_signature() {
 #[test]
 fn test_auth_sig_commit_to_wrong_epoch_id_fail() {
     let message: Foo = Foo("some data".to_string());
+    let intent_msg = IntentMessage::new(Intent::default(), message.clone());
+
     let mut signatures: Vec<AuthoritySignInfo> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
 
@@ -268,7 +272,7 @@ fn test_auth_sig_commit_to_wrong_epoch_id_fail() {
     {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
         // signature commits to epoch 0
-        let sig = AuthoritySignature::new(&message, 1, &sec);
+        let sig = AuthoritySignature::new_secure(&intent_msg, Some(1), &sec);
         quorum.signature.add_signature(sig).unwrap();
     }
     let (mut obligation, idx) = get_obligation_input(&message);

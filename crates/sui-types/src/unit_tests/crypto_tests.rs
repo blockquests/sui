@@ -34,6 +34,31 @@ fn public_key_equality() {
     assert_ne!(k1_pk1, k1_pk2);
 }
 
+#[test]
+fn test_pop() {
+    // The result from this deterministic test is used in crates/sui-framework/tests/validator_tests.move
+    // sender address: 0x21b60aa9a8cb189ccbe20461dbfad2202fdef55b
+    // pop: 8679ac988605f7eb5191331ffc7101fd664b8a1e30c5bbdbd9db43e2f8f2e5c2bc17d744eceeea598b2943ca8f7183fb
+    // pk: 99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10
+
+    let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+    let (address, _): (SuiAddress, AccountKeyPair) =
+        get_key_pair_from_rng(&mut StdRng::from_seed([0; 32]));
+    let mut domain_with_pk: Vec<u8> = Vec::new();
+    domain_with_pk.extend_from_slice(PROOF_OF_POSSESSION_DOMAIN);
+    domain_with_pk.extend_from_slice(keypair.public().as_bytes());
+    domain_with_pk.extend_from_slice(address.as_ref());
+    let pop = generate_proof_of_possession(&keypair, address);
+
+    let intent_msg = IntentMessage::new(
+        Intent::default().with_scope(IntentScope::ProofOfPossession),
+        domain_with_pk,
+    );
+    assert!(pop
+        .verify_secure(&intent_msg, None, keypair.public().into())
+        .is_ok());
+}
+
 proptest! {
     // Check those functions do not panic
     #[test]
