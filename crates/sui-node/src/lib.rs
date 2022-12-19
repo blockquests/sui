@@ -70,6 +70,7 @@ use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::SuiTxValidator;
 use sui_core::narwhal_manager::{run_narwhal_manager, NarwhalConfiguration, NarwhalManager};
 use sui_json_rpc::coin_api::CoinReadApi;
+use sui_json_rpc::governance_api::GovernanceReadApi;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -640,6 +641,7 @@ pub async fn build_server(
     server.register_module(FullNodeApi::new(state.clone()))?;
     server.register_module(BcsApiImpl::new(state.clone()))?;
     server.register_module(FullNodeTransactionBuilderApi::new(state.clone()))?;
+    server.register_module(GovernanceReadApi::new(state.clone()))?;
 
     if let Some(transaction_orchestrator) = transaction_orchestrator {
         server.register_module(FullNodeTransactionExecutionApi::new(
