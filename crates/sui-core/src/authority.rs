@@ -1938,7 +1938,7 @@ impl AuthorityState {
         })
     }
 
-    pub fn reconfigure(&self, new_committee: Committee) -> SuiResult {
+    pub async fn reconfigure(&self, new_committee: Committee) -> SuiResult {
         // TODO: We should move the committee into epoch db store, so that the operation below
         // can become atomic.
         fp_ensure!(
@@ -1947,7 +1947,7 @@ impl AuthorityState {
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
-        self.db().reopen_epoch_db(new_committee);
+        self.db().reopen_epoch_db(new_committee).await;
         Ok(())
     }
 
