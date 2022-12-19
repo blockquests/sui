@@ -4,6 +4,7 @@
 use sui_json_rpc_types::SuiExecuteTransactionResponse;
 use sui_types::base_types::TransactionDigest;
 use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
 
 pub type SuiRpcResult<T = ()> = Result<T, RpcError>;
@@ -27,4 +28,14 @@ pub enum RpcError {
         client_version: String,
         server_version: String,
     },
+    //     #[error("Encountered error when sumitting tx: {:?}", error)]
+    //     QuorumDriverError {
+    //         error: QuorumDriverError,
+    //     },
+    // }
+
+    // impl From<QuorumDriverError> for RpcError {
+    //     fn from(error: QuorumDriverError) -> Self {
+    //         RpcError::QuorumDriverError {error}
+    //     }
 }

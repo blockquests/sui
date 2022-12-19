@@ -9,8 +9,9 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::error::SuiResult;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    QuorumDriverRequest, QuorumDriverRequestType, VerifiedTransaction,
+    VerifiedTransaction,
 };
+use sui_types::quorum_driver_types::QuorumDriverError;
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
@@ -42,14 +43,17 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     // Quorum driver does not execute txn locally
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
-    orchestrator
+    let ticket = orchestrator
         .quorum_driver()
-        .execute_transaction(QuorumDriverRequest {
-            transaction: txn,
-            request_type: QuorumDriverRequestType::WaitForEffectsCert,
-        })
-        .await
-        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
+        .submit_transaction_no_ticket(txn)
+        .await?;
+
+    // .execute_transaction(QuorumDriverRequest {
+    //     transaction: txn,
+    //     request_type: QuorumDriverRequestType::WaitForEffectsCert,
+    // })
+    // .await
+    // .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     // Wait for data sync to catch up
     wait_for_tx(digest, node.state().clone()).await;
@@ -223,7 +227,7 @@ async fn execute_with_orchestrator(
     orchestrator: &TransactiondOrchestrator<NetworkAuthorityClient>,
     txn: VerifiedTransaction,
     request_type: ExecuteTransactionRequestType,
-) -> SuiResult<ExecuteTransactionResponse> {
+) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
     orchestrator
         .execute_transaction(ExecuteTransactionRequest {
             transaction: txn.into(),

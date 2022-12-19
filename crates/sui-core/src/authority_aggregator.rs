@@ -1172,7 +1172,7 @@ where
                     Box::pin(async move {
                         match result {
                             // If we are given back a certificate, then we do not need
-                            // to re-submit this transaction, we just returned the ready made
+                            // to re-submit this transaction, we just returned the already made
                             // certificate. A certificate is only valid if it's formed in the
                             // current epoch.
                             Ok(VerifiedTransactionInfoResponse {
@@ -1185,6 +1185,8 @@ where
                                 debug!(tx_digest = ?tx_digest, name=?name.concise(), weight, "Received prev certificate from validator handle_transaction");
                                 state.certificate = Some(inner_certificate);
                             }
+                            // TODO: we shouldn't need this because correct validators will re-sign
+                            // the cert of a transaction finalized in past epoches.
 
                             // If we didn't match the above case but here, it means that we have
                             // a cert from a different epoch, and also have effects (i.e. already
@@ -1262,6 +1264,19 @@ where
                                 // This should start happen less over time as we are working on
                                 // eliminating this on honest validators.
                                 // Log a warning to keep track.
+
+                                // TODO: separate real wrong epoch and other cases, such as wrong
+                                // combination of optionality due to validator corrupted database.
+                                // Also use a different error type.
+
+                                // Note the wrong epoch here usually indicates that validator's 
+                                // epoch is smaller than client's, because if otherwise, SafeClient
+                                // would return an error and it wouldn't reach here. Assuming this
+                                // client's reconfig works alright, then it means the problematic
+                                // validator is falling behind in a past epoch. Or, in some edge
+                                // cases, the validator finishes reconfig between it signs this
+                                // transaction and the client finishes reconfig. In either case,
+                                // quorum driver should retry.
                                 if let Some(inner_certificate) = &ret.certified_transaction {
                                     warn!(
                                         ?tx_digest,

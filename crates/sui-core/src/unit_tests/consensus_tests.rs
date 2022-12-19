@@ -5,6 +5,8 @@ use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
+use crate::test_utils::test_account_keys;
+pub use crate::test_utils::test_gas_objects;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use multiaddr::Multiaddr;
 use narwhal_types::Transactions;
@@ -22,19 +24,19 @@ use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 /// Fixture: a few test gas objects.
-pub fn test_gas_objects() -> Vec<Object> {
-    thread_local! {
-        static GAS_OBJECTS: Vec<Object> = (0..4)
-            .map(|_| {
-                let gas_object_id = ObjectID::random();
-                let (owner, _) = deterministic_random_account_key();
-                Object::with_id_owner_for_testing(gas_object_id, owner)
-            })
-            .collect();
-    }
+// pub fn test_gas_objects() -> Vec<Object> {
+//     thread_local! {
+//         static GAS_OBJECTS: Vec<Object> = (0..4)
+//             .map(|_| {
+//                 let gas_object_id = ObjectID::random();
+//                 let (owner, _) = test_account_keys().pop().unwrap();
+//                 Object::with_id_owner_for_testing(gas_object_id, owner)
+//             })
+//             .collect();
+//     }
 
-    GAS_OBJECTS.with(|v| v.clone())
-}
+//     GAS_OBJECTS.with(|v| v.clone())
+// }
 
 /// Fixture: a few test certificates containing a shared object.
 pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {

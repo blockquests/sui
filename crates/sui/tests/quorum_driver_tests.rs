@@ -3,22 +3,32 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use sui_core::authority::authority_notify_read::NotifyRead;
 use sui_core::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder};
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
+use sui_core::test_utils::test_account_keys;
+use sui_core::test_utils::test_gas_objects;
+use sui_core::test_utils::{make_transfer_object_transaction, make_transfer_sui_transaction};
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::error::SuiError;
+<<<<<<< HEAD
 use sui_types::messages::{
-    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, VerifiedTransaction,
+    QuorumDriverRequest, QuorumDriverResponse, VerifiedTransaction,
 };
 use sui_types::object::{generate_test_gas_objects, Object};
 use test_utils::authority::{
     spawn_test_authorities, test_and_configure_authority_configs, test_authority_configs,
 };
 use test_utils::messages::make_transfer_sui_transaction;
+=======
+use sui_types::messages::{QuorumDriverResponse, VerifiedTransaction};
+use sui_types::object::Object;
+use test_utils::authority::{
+    spawn_test_authorities, test_and_configure_authority_configs, test_authority_configs,
+};
+>>>>>>> 9d725beb8 (stash)
 
 async fn setup() -> (
     Vec<SuiNodeHandle>,
@@ -44,45 +54,41 @@ async fn setup() -> (
     (handles, aggregator, tx)
 }
 
-#[tokio::test]
-async fn test_execute_transaction_immediate() {
-    let (_handles, aggregator, tx) = setup().await;
-    let digest = *tx.digest();
-    // let notifier = NotifyRead::default();
-    let quorum_driver_handler = QuorumDriverHandler::new(
-        Arc::new(aggregator),
-        Arc::new(QuorumDriverMetrics::new_for_tests()),
-    );
-    // let quorum_driver = quorum_driver_handler.clone_quorum_driver();
-    let handle = tokio::task::spawn(async move {
-        let QuorumDriverResponse {
-            tx_cert,
-            effects_cert,
-        } = quorum_driver_handler
-            .subscribe_to_effects()
-            .recv()
-            .await
-            .unwrap();
-        assert_eq!(*tx_cert.digest(), digest);
-        assert_eq!(effects_cert.data().transaction_digest, digest);
-    });
-    let ticket = quorum_driver_handler.submit_transaction(tx).await.unwrap();
-    let QuorumDriverResponse {
-        tx_cert,
-        effects_cert,
-    } = ticket.await;
-    // assert!(matches!(
-    // .execute_transaction(QuorumDriverRequest {
-    //     transaction: tx,
-    //     request_type: QuorumDriverRequestType::ImmediateReturn,
-    // })
-    // .await
-    // .unwrap(),
-    //     QuorumDriverResponse::ImmediateReturn
-    // ));
+// #[tokio::test]
+// async fn test_execute_transaction_immediate() {
+//     let (_handles, aggregator, tx) = setup().await;
+//     let digest = *tx.digest();
+//     // let notifier = NotifyRead::default();
+//     let quorum_driver_handler = Arc::new(QuorumDriverHandler::new(
+//         Arc::new(aggregator),
+//         Arc::new(QuorumDriverMetrics::new_for_tests()),
+//     ));
+//     let qd_clone = quorum_driver_handler.clone();
+//     let handle = tokio::task::spawn(async move {
+//         let QuorumDriverResponse {
+//             tx_cert,
+//             effects_cert,
+//         } = qd_clone.subscribe_to_effects().recv().await.unwrap();
+//         assert_eq!(*tx_cert.digest(), digest);
+//         assert_eq!(effects_cert.data().transaction_digest, digest);
+//     });
+//     let ticket = quorum_driver_handler.submit_transaction(tx).await.unwrap();
+//     let QuorumDriverResponse {
+//         tx_cert,
+//         effects_cert,
+//     } = ticket.await;
+//     // assert!(matches!(
+//     // .execute_transaction(QuorumDriverRequest {
+//     //     transaction: tx,
+//     //     request_type: QuorumDriverRequestType::ImmediateReturn,
+//     // })
+//     // .await
+//     // .unwrap(),
+//     //     QuorumDriverResponse::ImmediateReturn
+//     // ));
 
-    handle.await.unwrap();
-}
+//     handle.await.unwrap();
+// }
 
 <<<<<<< HEAD
 #[tokio::test]

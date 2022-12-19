@@ -27,6 +27,7 @@ use sui_types::event::BalanceChangeType;
 use sui_types::event::Event;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+    QuorumDriverResponse,
 };
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
@@ -959,7 +960,10 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
 
     match res {
         ExecuteTransactionResponse::EffectsCert(res) => {
-            let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
+            let QuorumDriverResponse {
+                tx_cert: certified_txn,
+                effects_cert: certified_txn_effects,
+            } = rx.recv().await.unwrap();
             let (ct, cte, is_executed_locally) = *res;
             assert_eq!(*ct.digest(), digest);
             assert_eq!(*certified_txn.digest(), digest);
@@ -990,7 +994,10 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
 
     match res {
         ExecuteTransactionResponse::EffectsCert(res) => {
-            let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
+            let QuorumDriverResponse {
+                tx_cert: certified_txn,
+                effects_cert: certified_txn_effects,
+            } = rx.recv().await.unwrap();
             let (ct, cte, is_executed_locally) = *res;
             assert_eq!(*ct.digest(), digest);
             assert_eq!(*certified_txn.digest(), digest);
@@ -1021,7 +1028,10 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
 
     match res {
         ExecuteTransactionResponse::TxCert(res) => {
-            let (certified_txn, _certified_txn_effects) = rx.recv().await.unwrap();
+            let QuorumDriverResponse {
+                tx_cert: certified_txn,
+                effects_cert: certified_txn_effects,
+            } = rx.recv().await.unwrap();
             let ct = *res;
             assert_eq!(*ct.digest(), digest);
             assert_eq!(*certified_txn.digest(), digest);
@@ -1047,7 +1057,10 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
 
     match res {
         ExecuteTransactionResponse::ImmediateReturn => {
-            let (certified_txn, _certified_txn_effects) = rx.recv().await.unwrap();
+            let QuorumDriverResponse {
+                tx_cert: certified_txn,
+                effects_cert: certified_txn_effects,
+            } = rx.recv().await.unwrap();
             assert_eq!(*certified_txn.digest(), digest);
 
             wait_for_tx(digest, node.state().clone()).await;

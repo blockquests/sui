@@ -11,12 +11,13 @@ use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::TransactionDigest;
+use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResult};
 
 use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::authority::AuthorityState;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
-use crate::quorum_driver::{QuorumDriver, QuorumDriverHandler, QuorumDriverMetrics};
+use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
@@ -46,11 +47,10 @@ const WAIT_FOR_FINALITY_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct TransactiondOrchestrator<A> {
     quorum_driver_handler: Arc<QuorumDriverHandler<A>>,
-    // quorum_driver: Arc<QuorumDriver<A>>,
     validator_state: Arc<AuthorityState>,
     _local_executor_handle: JoinHandle<()>,
     pending_tx_log: Arc<WritePathPendingTransactionLog>,
-    notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResponse>>,
+    notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
     metrics: Arc<TransactionOrchestratorMetrics>,
 }
 
@@ -70,7 +70,6 @@ where
             notifier.clone(),
             Arc::new(QuorumDriverMetrics::new(prometheus_registry)),
         ));
-        // let quorum_driver = quorum_driver_handler.clone_quorum_driver();
         let effects_receiver = quorum_driver_handler.subscribe_to_effects();
         let state_clone = validator_state.clone();
         let metrics = Arc::new(TransactionOrchestratorMetrics::new(prometheus_registry));
@@ -92,7 +91,6 @@ where
         };
         Self {
             quorum_driver_handler,
-            // quorum_driver,
             validator_state,
             _local_executor_handle,
             pending_tx_log,
@@ -101,12 +99,12 @@ where
         }
     }
 
-    // TODO, explain sync
+    // TODO, explain async
     async fn submit(
         &self,
         transaction: VerifiedTransaction,
-    ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResponse>> {
-        let reg = self.notifier.register_one(transaction.digest());
+    ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
+        let ticket = self.notifier.register_one(transaction.digest());
         if self
             .pending_tx_log
             .write_pending_transaction_maybe(&transaction)
@@ -114,14 +112,14 @@ where
         {
             self.quorum_driver().submit_transaction(transaction).await?;
         }
-        Ok(reg)
+        Ok(ticket)
     }
 
     #[instrument(name = "tx_orchestrator_execute_transaction", level = "debug", skip_all, fields(request_type = ?request.request_type), err)]
     pub async fn execute_transaction(
         &self,
         request: ExecuteTransactionRequest,
-    ) -> SuiResult<ExecuteTransactionResponse> {
+    ) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
         let (_in_flight_metrics_guard, good_response_metrics) =
             self.update_metrics(&request.request_type);
 
@@ -144,53 +142,52 @@ where
             request.request_type,
             ExecuteTransactionRequestType::WaitForLocalExecution
         );
-        let Ok(response) = timeout(
+        let Ok(result) = timeout(
             WAIT_FOR_FINALITY_TIMEOUT,
             ticket,
         ).await else {
             debug!(?tx_digest, "Timeout waiting for transaction finality");
-            return Err(SuiError::TimeoutError);
+            return Err(QuorumDriverError::TimeoutBeforeReachFinality);
         };
-
-        good_response_metrics.inc();
-        // match execution_result {
-        //     QuorumDriverResponse::ImmediateReturn => {
-        //         Ok(ExecuteTransactionResponse::ImmediateReturn)
-        //     }
-        //     QuorumDriverResponse::TxCert(result) => Ok(ExecuteTransactionResponse::TxCert(
-        //         Box::new(result.into_inner()),
-        //     )),
-        //     QuorumDriverResponse::EffectsCert(result) => {
-        //         let (tx_cert, effects_cert) = *result;
-        let QuorumDriverResponse {
-            tx_cert,
-            effects_cert,
-        } = response;
-        if !wait_for_local_execution {
-            return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                tx_cert.into(),
-                effects_cert.into(),
-                false,
-            ))));
-        }
-        match Self::execute_finalized_tx_locally_with_timeout(
-            &self.validator_state,
-            &tx_cert,
-            &effects_cert,
-            &self.metrics,
-        )
-        .await
-        {
-            Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                tx_cert.into(),
-                effects_cert.into(),
-                true,
-            )))),
-            Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                tx_cert.into(),
-                effects_cert.into(),
-                false,
-            )))),
+        match result {
+            Err(err) => {
+                // FIXME
+                // inc bad reponse metrics
+                Err(err)
+            }
+            Ok(response) => {
+                good_response_metrics.inc();
+                let QuorumDriverResponse {
+                    tx_cert,
+                    effects_cert,
+                } = response;
+                if !wait_for_local_execution {
+                    return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                        tx_cert.into(),
+                        effects_cert.into(),
+                        false,
+                    ))));
+                }
+                match Self::execute_finalized_tx_locally_with_timeout(
+                    &self.validator_state,
+                    &tx_cert,
+                    &effects_cert,
+                    &self.metrics,
+                )
+                .await
+                {
+                    Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                        tx_cert.into(),
+                        effects_cert.into(),
+                        true,
+                    )))),
+                    Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                        tx_cert.into(),
+                        effects_cert.into(),
+                        false,
+                    )))),
+                }
+            }
         }
     }
 

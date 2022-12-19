@@ -23,7 +23,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use tap::TapFallible;
+use tap::{Tap, TapFallible};
 use tracing::{debug, error};
 
 macro_rules! check_error {
@@ -233,6 +233,9 @@ impl<C> SafeClient<C> {
         } = response;
 
         let signed_transaction = if let Some(signed_transaction) = signed_transaction {
+            // TODO: add test case where validator epoch advances but client does not know
+            // `MissingCommitteeAtEpoch`
+            // In this case, quorum driver should pause submit tranasactions until it catches up
             committee = Some(self.get_committee(&signed_transaction.epoch())?);
             // Check the transaction signature
             let signed_transaction = signed_transaction.verify(committee.as_ref().unwrap())?;
@@ -523,7 +526,8 @@ where
             .await?;
         let transaction_info = check_error!(
             self.address,
-            self.check_transaction_response(&digest, None, transaction_info),
+            self.check_transaction_response(&digest, None, transaction_info)
+                .tap_err(|err| error!("@@@@@@@@@@@@@@ !! {err}")),
             "Client error in handle_transaction"
         )?;
         Ok(transaction_info)

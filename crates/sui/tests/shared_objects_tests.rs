@@ -3,6 +3,7 @@
 
 use futures::{stream, StreamExt};
 use sui_core::authority_client::AuthorityAPI;
+use sui_core::test_utils::test_gas_objects;
 use sui_types::messages::{
     CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
 };

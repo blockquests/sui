@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::{NetworkConfig, ValidatorInfo};
+use sui_core::test_utils::test_gas_objects;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};

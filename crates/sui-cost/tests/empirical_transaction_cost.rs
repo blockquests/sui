@@ -5,6 +5,10 @@ use insta::assert_json_snapshot;
 use std::{collections::BTreeMap, path::PathBuf};
 use sui_config::NetworkConfig;
 use sui_config::ValidatorInfo;
+use sui_core::test_utils::make_transfer_object_transaction;
+use sui_core::test_utils::make_transfer_sui_transaction;
+use sui_core::test_utils::test_account_keys;
+use sui_core::test_utils::test_gas_objects;
 use sui_cost::estimator::estimate_transaction_computation_cost;
 use sui_cost::estimator::CommonTransactionCosts;
 use sui_types::base_types::SuiAddress;
@@ -18,8 +22,6 @@ use sui_types::{
     gas::GasCostSummary,
     messages::{CallArg, ExecutionStatus, ObjectArg},
 };
-use test_utils::messages::make_transfer_object_transaction;
-use test_utils::messages::make_transfer_sui_transaction;
 use test_utils::messages::move_transaction_with_type_tags;
 use test_utils::transaction::get_framework_object;
 use test_utils::transaction::make_publish_package;

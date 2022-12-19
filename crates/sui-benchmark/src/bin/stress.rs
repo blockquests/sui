@@ -37,6 +37,7 @@ use tracing::log::info;
 
 use sui_types::object::generate_test_gas_objects_with_owner;
 use test_utils::authority::spawn_test_authorities;
+use sui_core::test_utils::test_account_keys;
 use test_utils::authority::test_and_configure_authority_configs;
 use tokio::runtime::Builder;
 use tokio::sync::Barrier;

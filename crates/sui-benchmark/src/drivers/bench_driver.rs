@@ -352,16 +352,16 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                                 ))
                                             }
                                             Err(err) => {
-                                                if err.indicates_epoch_change() {
-                                                    let mut rng = rand::rngs::OsRng;
-                                                    let jitter = rng.gen_range(0..RECONFIG_QUIESCENCE_TIME_SEC);
-                                                    sleep(Duration::from_secs(RECONFIG_QUIESCENCE_TIME_SEC + jitter)).await;
+                                                // if err.indicates_epoch_change() {
+                                                //     let mut rng = rand::rngs::OsRng;
+                                                //     let jitter = rng.gen_range(0..RECONFIG_QUIESCENCE_TIME_SEC);
+                                                //     sleep(Duration::from_secs(RECONFIG_QUIESCENCE_TIME_SEC + jitter)).await;
 
-                                                    proxy_clone.reconfig().await;
-                                                } else {
+                                                //     proxy_clone.reconfig().await;
+                                                // } else {
                                                     error!("{}", err);
-                                                    metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string(), err.as_ref()]).inc();
-                                                }
+                                                    // metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string(), err.as_ref()]).inc();
+                                                // }
                                                 NextOp::Retry(b)
                                             }
                                         }
@@ -405,16 +405,16 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                             )))
                                         }
                                         Err(err) => {
-                                            if err.indicates_epoch_change() {
-                                                let mut rng = rand::rngs::OsRng;
-                                                let jitter = rng.gen_range(0..RECONFIG_QUIESCENCE_TIME_SEC);
-                                                sleep(Duration::from_secs(RECONFIG_QUIESCENCE_TIME_SEC + jitter)).await;
+                                            // if err.indicates_epoch_change() {
+                                            //     let mut rng = rand::rngs::OsRng;
+                                            //     let jitter = rng.gen_range(0..RECONFIG_QUIESCENCE_TIME_SEC);
+                                            //     sleep(Duration::from_secs(RECONFIG_QUIESCENCE_TIME_SEC + jitter)).await;
 
-                                                proxy_clone.reconfig().await;
-                                            } else {
+                                            //     proxy_clone.reconfig().await;
+                                            // } else {
                                                 error!("Retry due to error: {}", err);
-                                                metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string(), err.as_ref()]).inc();
-                                            }
+                                                // metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string(), err.as_ref()]).inc();
+                                            // }
                                             NextOp::Retry(Box::new((tx, payload)))
                                         }
                                     }

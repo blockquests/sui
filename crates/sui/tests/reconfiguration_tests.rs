@@ -120,7 +120,7 @@ use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSI
 use test_utils::authority::{get_object, start_node, test_authority_configs};
 use test_utils::messages::{make_transfer_sui_transaction, move_transaction};
 use test_utils::objects::{generate_gas_object_with_balance, test_gas_objects};
-use test_utils::test_account_keys;
+use sui_core::test_utils::test_account_keys;
 use test_utils::transaction::{
     publish_counter_package, submit_shared_object_transaction,
     submit_shared_object_transaction_with_committee, submit_single_owner_transaction,
