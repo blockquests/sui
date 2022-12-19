@@ -8,7 +8,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::error::{SuiError, SuiResult};
 use typed_store::rocks::{DBMap, DBOptions};
-use typed_store::traits::TypedStoreDebug;
+use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use sui_types::fp_ensure;
 use typed_store::Map;

@@ -22,7 +22,7 @@ use sui_types::messages::{
 };
 use tracing::debug;
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
-use typed_store::traits::TypedStoreDebug;
+use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::{CertTxGuard, MAX_TX_RECOVERY_RETRY};

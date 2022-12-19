@@ -9,7 +9,7 @@ use sui_types::base_types::{ExecutionDigests, SequenceNumber};
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::messages::TrustedCertificate;
 use typed_store::rocks::{DBMap, DBOptions};
-use typed_store::traits::TypedStoreDebug;
+use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use typed_store_derive::DBMapUtils;
 

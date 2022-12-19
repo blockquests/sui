@@ -9160,6 +9160,7 @@ dependencies = [
  "textwrap 0.16.0",
  "tokio",
  "tracing",
+ "typed-store",
  "workspace-hack",
 ]
 
@@ -10190,6 +10191,7 @@ dependencies = [
  "collectable",
  "eyre",
  "fdlimit",
+ "hdrhistogram",
  "num_cpus",
  "once_cell",
  "proc-macro2 1.0.47",
