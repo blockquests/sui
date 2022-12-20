@@ -718,7 +718,7 @@ where
         // Verify the checkpoint
         let checkpoint = {
             let checkpoint = maybe_checkpoint
-                .ok_or_else(|| anyhow::anyhow!("no peers where able to help sync"))?;
+                .ok_or_else(|| anyhow::anyhow!("no peers were able to help sync"))?;
 
             if checkpoint.sequence_number() != next
                 || current.as_ref().map(|x| x.digest()) != checkpoint.previous_digest()
@@ -786,13 +786,15 @@ async fn sync_checkpoint_contents<S>(
     S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
 {
-    let mut highest_synced = None;
-
-    let start = store
+    let mut highest_synced = store
         .get_highest_synced_checkpoint()
-        .expect("store operation should not fail")
+        .expect("store operation should not fail");
+
+    let start = highest_synced
+        .as_ref()
         .map(|x| x.sequence_number().saturating_add(1))
         .unwrap_or(0);
+
     for checkpoint in (start..=target_checkpoint.sequence_number()).map(|next| {
         store
             .get_checkpoint_by_sequence_number(next)
@@ -809,6 +811,15 @@ async fn sync_checkpoint_contents<S>(
         .await
         {
             Ok(checkpoint) => {
+                if let Some(highest_synced) = &highest_synced {
+                    // if this fails, there is a bug in checkpoint construction (or the chain is
+                    // corrupted)
+                    assert_eq!(
+                        highest_synced.summary.next_tx_sequence_number(),
+                        checkpoint.summary.first_tx_sequence_number
+                    );
+                }
+
                 store
                     .update_highest_synced_checkpoint(&checkpoint)
                     .expect("store operation should not fail");
@@ -862,6 +873,9 @@ where
     let Some(contents) = get_checkpoint_contents(&mut peers, &store, checkpoint.content_digest()).await else {
         return Err(anyhow!("unable to sync checkpoint contents for checkpoint {}", checkpoint.sequence_number()));
     };
+
+    // if this fails, there is a bug in checkpoint construction (or the chain is corrupted)
+    assert_eq!(contents.size() as u64, checkpoint.summary.size());
 
     // Sync transactions and effects
     let mut stream = contents
