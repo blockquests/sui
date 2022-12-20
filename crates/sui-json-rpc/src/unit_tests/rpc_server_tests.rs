@@ -76,12 +76,11 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    if let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response {
-        assert_eq!(
-            dryrun_response.transaction_digest,
-            effects.effects.transaction_digest
-        );
-    }
+    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    assert_eq!(
+        dryrun_response.transaction_digest,
+        effects.effects.transaction_digest
+    );
     Ok(())
 }
 
@@ -275,9 +274,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert {effects,..} = tx_response else {
-        panic!()
-    };
+    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
 
     let package_id = effects
         .effects
@@ -338,9 +335,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert {effects,..} = tx_response else {
-        panic!()
-    };
+    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
 
     let package_id = effects
         .effects
@@ -419,9 +414,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert {effects,..} = tx_response else {
-        panic!()
-    };
+    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
 
     assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
 
