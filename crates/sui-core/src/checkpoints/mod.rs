@@ -417,6 +417,12 @@ impl CheckpointBuilder {
         last_checkpoint_of_epoch: bool,
     ) -> anyhow::Result<Option<(CheckpointSummary, CheckpointContents)>> {
         let last_checkpoint = self.tables.checkpoint_summary.iter().skip_to_last().next();
+
+        let first_tx_sequence_number = last_checkpoint
+            .as_ref()
+            .map(|(_, c)| c.next_tx_sequence_number())
+            .unwrap_or(0);
+
         let epoch_rolling_gas_cost_summary = Self::get_epoch_total_gas_cost(
             last_checkpoint.as_ref().map(|(_, c)| c),
             &effects,
@@ -440,6 +446,7 @@ impl CheckpointBuilder {
         let summary = CheckpointSummary::new(
             self.state.epoch(),
             sequence_number,
+            first_tx_sequence_number,
             &contents,
             previous_digest,
             epoch_rolling_gas_cost_summary,

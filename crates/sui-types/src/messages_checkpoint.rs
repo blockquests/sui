@@ -20,6 +20,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 pub type CheckpointSequenceNumber = u64;
+pub type TxSequenceNumber = u64;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointRequest {
@@ -132,6 +133,8 @@ impl AsRef<[u8; 32]> for CheckpointContentsDigest {
 pub struct CheckpointSummary {
     pub epoch: EpochId,
     pub sequence_number: CheckpointSequenceNumber,
+    pub first_tx_sequence_number: TxSequenceNumber,
+    pub num_transactions: u64,
     pub content_digest: CheckpointContentsDigest,
     pub previous_digest: Option<CheckpointDigest>,
     /// The running total gas costs of all transactions included in the current epoch so far
@@ -151,6 +154,7 @@ impl CheckpointSummary {
     pub fn new(
         epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
+        first_tx_sequence_number: TxSequenceNumber,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
@@ -161,11 +165,21 @@ impl CheckpointSummary {
         Self {
             epoch,
             sequence_number,
+            first_tx_sequence_number,
+            num_transactions: transactions.size() as u64,
             content_digest,
             previous_digest,
             epoch_rolling_gas_cost_summary,
             next_epoch_committee: next_epoch_committee.map(|c| c.voting_rights),
         }
+    }
+
+    pub fn size(&self) -> u64 {
+        self.num_transactions
+    }
+
+    pub fn next_tx_sequence_number(&self) -> TxSequenceNumber {
+        self.first_tx_sequence_number + self.size()
     }
 
     pub fn sequence_number(&self) -> &CheckpointSequenceNumber {
@@ -242,6 +256,7 @@ impl SignedCheckpointSummary {
     pub fn new(
         epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
+        first_tx_sequence_number: TxSequenceNumber,
         authority: AuthorityName,
         signer: &dyn signature::Signer<AuthoritySignature>,
         transactions: &CheckpointContents,
@@ -252,6 +267,7 @@ impl SignedCheckpointSummary {
         let checkpoint = CheckpointSummary::new(
             epoch,
             sequence_number,
+            first_tx_sequence_number,
             transactions,
             previous_digest,
             epoch_rolling_gas_cost_summary,
@@ -502,6 +518,7 @@ mod tests {
                 SignedCheckpointSummary::new(
                     committee.epoch,
                     1,
+                    0,
                     name,
                     k,
                     &set,
@@ -539,6 +556,7 @@ mod tests {
                 SignedCheckpointSummary::new(
                     committee.epoch,
                     1,
+                    0,
                     name,
                     k,
                     &set,
@@ -567,6 +585,7 @@ mod tests {
                 SignedCheckpointSummary::new(
                     committee.epoch,
                     1,
+                    0,
                     name,
                     k,
                     &set,
